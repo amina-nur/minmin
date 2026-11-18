@@ -21,13 +21,22 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# CORS configuration for local development and Vercel deployment
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+
+allowed_origins = ["http://localhost:5173"]
+
+if FRONTEND_URL:
+    allowed_origins.append(FRONTEND_URL.rstrip("/"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -80,7 +89,9 @@ def chat(request: ChatRequest):
             )
         )
 
-        return {"reply": response.text or "Hmm, I couldn't form a reply. Try again!"}
+        return {
+            "reply": response.text or "Hmm, I couldn't form a reply. Try again!"
+        }
 
     except Exception as error:
         print("Gemini error:", error)
@@ -88,4 +99,3 @@ def chat(request: ChatRequest):
             status_code=500,
             detail="Minmin couldn't reach Gemini. Check the backend terminal."
         )
-
