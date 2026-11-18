@@ -1,6 +1,7 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Volume2 } from "lucide-react";
+import { Send, Volume2, VolumeX } from "lucide-react";
 import "./App.css";
 
 type Message = {
@@ -52,6 +53,8 @@ function App() {
   const [mood, setMood] = useState("happy");
   const [mode, setMode] = useState<Mode>("companion");
   const [isLoading, setIsLoading] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -63,8 +66,81 @@ function App() {
   const [xp, setXp] = useState(120);
   const [streak] = useState(3);
 
+  // Load the voices available in the browser.
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+
+    const loadVoices = () => {
+      setVoices(window.speechSynthesis.getVoices());
+    };
+
+    loadVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
+      window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  // Find Minmin's most recent reply, not the user's last message.
+  const latestMinminMessage = [...messages]
+    .reverse()
+    .find((message) => message.sender === "minmin");
+
+  function speakMinmin() {
+    if (!latestMinminMessage || !("speechSynthesis" in window)) {
+      return;
+    }
+
+    // Clicking again stops Minmin.
+    if (isSpeaking) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const text = latestMinminMessage.text;
+    const isKorean = /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(text);
+
+    const utterance = new SpeechSynthesisUtterance(text);
+
+    // Choose a voice matching the language of the reply.
+    const preferredLanguage = isKorean ? "ko" : "en";
+
+    const matchingVoice = voices.find((voice) =>
+      voice.lang.toLowerCase().startsWith(preferredLanguage)
+    );
+
+    if (matchingVoice) {
+      utterance.voice = matchingVoice;
+      utterance.lang = matchingVoice.lang;
+    } else {
+      utterance.lang = isKorean ? "ko-KR" : "en-US";
+    }
+
+    // A softer, slightly slower delivery.
+    utterance.pitch = isKorean ? 0.95 : 0.82;
+    utterance.rate = 0.92;
+    utterance.volume = 1;
+
+    utterance.onstart = () => setIsSpeaking(true);
+
+    utterance.onend = () => setIsSpeaking(false);
+
+    utterance.onerror = () => setIsSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+  }
+
   async function sendMessage() {
     if (!input.trim() || isLoading) return;
+
+    // Stop any previous speech when starting a new conversation.
+    window.speechSynthesis?.cancel();
+    setIsSpeaking(false);
 
     const userMessage = input.trim();
 
@@ -120,6 +196,8 @@ function App() {
   function changeMode(nextMode: Mode) {
     if (nextMode === mode) return;
 
+    window.speechSynthesis?.cancel();
+    setIsSpeaking(false);
     setMode(nextMode);
 
     setMessages((previous) => [
@@ -227,6 +305,18 @@ function App() {
             </motion.div>
           </AnimatePresence>
 
+          <button
+            type="button"
+            className="voice-button"
+            onClick={speakMinmin}
+            disabled={!latestMinminMessage || isLoading}
+            title={isSpeaking ? "Stop Minmin speaking" : "Let Minmin speak"}
+            aria-label={isSpeaking ? "Stop speaking" : "Speak reply"}
+          >
+            {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            <span>{isSpeaking ? "STOP" : "LET ME HEAR YOU"}</span>
+          </button>
+
           <Minmin mood={mood} onPoke={pokeMinmin} />
 
           <div className="ground-shadow" />
@@ -311,7 +401,7 @@ function App() {
           somewhere between the stars and your next Korean lesson
         </span>
         <span>
-          <Volume2 size={13} /> SOUND COMING SOON
+          <Volume2 size={13} /> VOICE EXPERIMENTAL
         </span>
       </footer>
     </main>
