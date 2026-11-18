@@ -1,0 +1,15 @@
+# Secrets
+backend/.env
+
+# Python
+backend/.venv/
+__pycache__/
+*.py[cod]
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# System
+.DS_Store
+Thumbs.db
