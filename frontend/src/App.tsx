@@ -1,7 +1,12 @@
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Send, Volume2, VolumeX } from "lucide-react";
+import {
+  Send,
+  Music2,
+  Play,
+  Pause,
+  Volume2,
+} from "lucide-react";
 import "./App.css";
 
 type Message = {
@@ -11,7 +16,8 @@ type Message = {
 
 type Mode = "companion" | "tutor";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 function Minmin({
   mood,
@@ -28,7 +34,8 @@ function Minmin({
       animate={{
         y: [0, -13, 0],
         rotate: [-2, 2, -2],
-        scale: mood === "excited" ? [1, 1.06, 1] : [1, 1.02, 1],
+        scale:
+          mood === "excited" ? [1, 1.06, 1] : [1, 1.02, 1],
       }}
       transition={{
         duration: mood === "excited" ? 0.55 : 3.5,
@@ -53,8 +60,6 @@ function App() {
   const [mood, setMood] = useState("happy");
   const [mode, setMode] = useState<Mode>("companion");
   const [isLoading, setIsLoading] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -66,81 +71,53 @@ function App() {
   const [xp, setXp] = useState(120);
   const [streak] = useState(3);
 
-  // Load the voices available in the browser.
+  // Music player state
+  const [isMusicPlaying, setIsMusicPlaying] = useState(false);
+  const [musicVolume, setMusicVolume] = useState(0.35);
+  const [musicError, setMusicError] = useState(false);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Set the initial music volume.
   useEffect(() => {
-    if (!("speechSynthesis" in window)) return;
+    if (audioRef.current) {
+      audioRef.current.volume = musicVolume;
+    }
+  }, [musicVolume]);
 
-    const loadVoices = () => {
-      setVoices(window.speechSynthesis.getVoices());
-    };
-
-    loadVoices();
-    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
-
+  // Stop music when the component is removed.
+  useEffect(() => {
     return () => {
-      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
-      window.speechSynthesis.cancel();
+      audioRef.current?.pause();
     };
   }, []);
 
-  // Find Minmin's most recent reply, not the user's last message.
-  const latestMinminMessage = [...messages]
-    .reverse()
-    .find((message) => message.sender === "minmin");
+  async function toggleMusic() {
+    const audio = audioRef.current;
 
-  function speakMinmin() {
-    if (!latestMinminMessage || !("speechSynthesis" in window)) {
+    if (!audio) return;
+
+    if (isMusicPlaying) {
+      audio.pause();
+      setIsMusicPlaying(false);
       return;
     }
 
-    // Clicking again stops Minmin.
-    if (isSpeaking) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-      return;
+    audio.volume = musicVolume;
+    setMusicError(false);
+
+    try {
+      await audio.play();
+      setIsMusicPlaying(true);
+    } catch (error) {
+      console.error("Minmin music error:", error);
+      setIsMusicPlaying(false);
+      setMusicError(true);
     }
-
-    window.speechSynthesis.cancel();
-
-    const text = latestMinminMessage.text;
-    const isKorean = /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(text);
-
-    const utterance = new SpeechSynthesisUtterance(text);
-
-    // Choose a voice matching the language of the reply.
-    const preferredLanguage = isKorean ? "ko" : "en";
-
-    const matchingVoice = voices.find((voice) =>
-      voice.lang.toLowerCase().startsWith(preferredLanguage)
-    );
-
-    if (matchingVoice) {
-      utterance.voice = matchingVoice;
-      utterance.lang = matchingVoice.lang;
-    } else {
-      utterance.lang = isKorean ? "ko-KR" : "en-US";
-    }
-
-    // A softer, slightly slower delivery.
-    utterance.pitch = isKorean ? 0.95 : 0.82;
-    utterance.rate = 0.92;
-    utterance.volume = 1;
-
-    utterance.onstart = () => setIsSpeaking(true);
-
-    utterance.onend = () => setIsSpeaking(false);
-
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
   }
 
   async function sendMessage() {
     if (!input.trim() || isLoading) return;
-
-    // Stop any previous speech when starting a new conversation.
-    window.speechSynthesis?.cancel();
-    setIsSpeaking(false);
 
     const userMessage = input.trim();
 
@@ -196,8 +173,6 @@ function App() {
   function changeMode(nextMode: Mode) {
     if (nextMode === mode) return;
 
-    window.speechSynthesis?.cancel();
-    setIsSpeaking(false);
     setMode(nextMode);
 
     setMessages((previous) => [
@@ -238,6 +213,19 @@ function App() {
 
   return (
     <main className="world">
+      <audio
+        ref={audioRef}
+        src="/lofi.mp3"
+        loop
+        preload="none"
+        onPlay={() => setIsMusicPlaying(true)}
+        onPause={() => setIsMusicPlaying(false)}
+        onError={() => {
+          setMusicError(true);
+          setIsMusicPlaying(false);
+        }}
+      />
+
       <div className="nebula nebula-one" />
       <div className="nebula nebula-two" />
       <div className="moon" />
@@ -305,18 +293,6 @@ function App() {
             </motion.div>
           </AnimatePresence>
 
-          <button
-            type="button"
-            className="voice-button"
-            onClick={speakMinmin}
-            disabled={!latestMinminMessage || isLoading}
-            title={isSpeaking ? "Stop Minmin speaking" : "Let Minmin speak"}
-            aria-label={isSpeaking ? "Stop speaking" : "Speak reply"}
-          >
-            {isSpeaking ? <VolumeX size={16} /> : <Volume2 size={16} />}
-            <span>{isSpeaking ? "STOP" : "LET ME HEAR YOU"}</span>
-          </button>
-
           <Minmin mood={mood} onPoke={pokeMinmin} />
 
           <div className="ground-shadow" />
@@ -327,7 +303,10 @@ function App() {
           <div className="conversation-label">
             <span>YOUR TURN</span>
             <span className="online">
-              <i /> {isLoading ? "MINMIN IS THINKING" : "MINMIN IS LISTENING"}
+              <i />{" "}
+              {isLoading
+                ? "MINMIN IS THINKING"
+                : "MINMIN IS LISTENING"}
             </span>
           </div>
 
@@ -380,16 +359,31 @@ function App() {
           </form>
 
           <div className="quick-actions">
-            <button onClick={() => setInput("안녕하세요!")}>
+            <button
+              type="button"
+              onClick={() => setInput("안녕하세요!")}
+            >
               안녕하세요
             </button>
-            <button onClick={() => setInput("도와주세요")}>
+
+            <button
+              type="button"
+              onClick={() => setInput("도와주세요")}
+            >
               Help me
             </button>
-            <button onClick={() => setInput("I'm bored")}>
+
+            <button
+              type="button"
+              onClick={() => setInput("I'm bored")}
+            >
               I'm bored
             </button>
-            <button onClick={() => setInput("학교에 가요")}>
+
+            <button
+              type="button"
+              onClick={() => setInput("학교에 가요")}
+            >
               Test my Korean
             </button>
           </div>
@@ -400,9 +394,49 @@ function App() {
         <span>
           somewhere between the stars and your next Korean lesson
         </span>
-        <span>
-          <Volume2 size={13} /> VOICE EXPERIMENTAL
-        </span>
+
+        <div className="music-player">
+          <Music2 size={15} />
+
+          <button
+            type="button"
+            className="music-toggle"
+            onClick={toggleMusic}
+            aria-label={
+              isMusicPlaying ? "Pause music" : "Play music"
+            }
+          >
+            {isMusicPlaying ? (
+              <Pause size={15} />
+            ) : (
+              <Play size={15} />
+            )}
+
+            {isMusicPlaying ? "PAUSE" : "PLAY LOFI"}
+          </button>
+
+          <Volume2 size={14} />
+
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={musicVolume}
+            onChange={(event) =>
+              setMusicVolume(Number(event.target.value))
+            }
+            aria-label="Music volume"
+          />
+
+          <span className="music-credit">Purrple Cat</span>
+        </div>
+
+        {musicError && (
+          <span className="music-error">
+            Couldn't load music. Check lofi.mp3.
+          </span>
+        )}
       </footer>
     </main>
   );

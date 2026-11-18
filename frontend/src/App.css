@@ -659,4 +659,53 @@ button {
   opacity: 0.45;
   cursor: not-allowed;
 }
+/* MINMIN LOFI MUSIC PLAYER */
 
+.music-player {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #eee7ff;
+}
+
+.music-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: #eee7ff;
+  font-size: 10px;
+  letter-spacing: 1.3px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.music-toggle:hover {
+  opacity: 0.7;
+}
+
+.music-player input[type="range"] {
+  width: 75px;
+  height: 3px;
+  accent-color: #c4a9ed;
+  cursor: pointer;
+}
+
+.music-credit {
+  font-size: 10px;
+  opacity: 0.65;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 600px) {
+  .footer {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .music-player {
+    gap: 9px;
+  }
+}
